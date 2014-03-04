@@ -19,7 +19,7 @@ public class FilePathProvider {
 		mediaStorageDir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), appName);
 		if(!mediaStorageDir.exists()){
 			if (! mediaStorageDir.mkdirs()){
-	            Log.d(TAG, "failed to create directory: "+mediaStorageDir);
+	            Log.e(TAG, "failed to create directory: "+mediaStorageDir);
 	        }
 		}
 	}
@@ -56,7 +56,7 @@ public class FilePathProvider {
 				mediaFile = file;
 			}
 		} catch (Exception ex) {
-			Log.d(TAG, "problem creating file:" + mediaFile, ex);
+			Log.e(TAG, "problem creating file:" + mediaFile, ex);
 		}
 
 	    return mediaFile;
