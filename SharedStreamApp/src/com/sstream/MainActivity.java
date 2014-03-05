@@ -1,4 +1,6 @@
-package com.example.sharedstreamapp;
+package com.sstream;
+
+import com.example.sharedstreamapp.R;
 
 import android.os.Bundle;
 import android.app.Activity;

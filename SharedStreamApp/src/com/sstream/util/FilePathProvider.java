@@ -1,4 +1,4 @@
-package com.example.sharedstreamapp;
+package com.sstream.util;
 
 import java.io.File;
 import java.text.SimpleDateFormat;

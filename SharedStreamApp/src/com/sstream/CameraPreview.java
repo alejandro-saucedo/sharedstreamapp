@@ -1,4 +1,4 @@
-package com.example.sharedstreamapp;
+package com.sstream;
 
 import java.io.IOException;
 
