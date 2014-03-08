@@ -1,4 +1,4 @@
-package com.middleware.util;
+package com.sstream.middleware.util;
 
 
 public class VideoException extends Exception implements VideoInterface {

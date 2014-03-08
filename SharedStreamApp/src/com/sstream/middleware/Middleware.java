@@ -1,4 +1,4 @@
-package com.middleware;
+package com.sstream.middleware;
 
 /**
  * Sistemas Distribuidos
@@ -28,15 +28,15 @@ import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import com.middleware.util.Berkeley;
-import com.middleware.util.ChronometerInterruptor;
-import com.middleware.util.MSGTypes;
-import com.middleware.util.MessageInterruption;
-import com.middleware.util.PendingVideoPackage;
-import com.middleware.util.VideoException;
-import com.middleware.util.VideoInterface;
-import com.middleware.util.VideoInterruption;
-import com.middleware.util.VideoPackage;
+import com.sstream.middleware.util.Berkeley;
+import com.sstream.middleware.util.ChronometerInterruptor;
+import com.sstream.middleware.util.MSGTypes;
+import com.sstream.middleware.util.MessageInterruption;
+import com.sstream.middleware.util.PendingVideoPackage;
+import com.sstream.middleware.util.VideoException;
+import com.sstream.middleware.util.VideoInterface;
+import com.sstream.middleware.util.VideoInterruption;
+import com.sstream.middleware.util.VideoPackage;
 
 
 public class Middleware implements MessageInterruption{

@@ -1,10 +1,10 @@
-package com.middleware.util;
+package com.sstream.middleware.util;
 
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.HashMap;
 
-import com.middleware.VideoContext;
+import com.sstream.middleware.VideoContext;
 /**
  * Sistemas Distribuidos
  * Miercoles 5 de Febrero 2014

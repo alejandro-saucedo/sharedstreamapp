@@ -1,4 +1,4 @@
-package com.middleware.util;
+package com.sstream.middleware.util;
 
 import java.io.IOException;
 import java.net.InetAddress;

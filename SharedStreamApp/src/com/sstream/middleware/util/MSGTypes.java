@@ -1,4 +1,4 @@
-package com.middleware.util;
+package com.sstream.middleware.util;
 
 /**
  * Sistemas Distribuidos

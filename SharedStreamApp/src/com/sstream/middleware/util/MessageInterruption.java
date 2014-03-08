@@ -1,4 +1,4 @@
-package com.middleware.util;
+package com.sstream.middleware.util;
 
 /**
  * Sistemas Distribuidos
@@ -6,8 +6,6 @@ package com.middleware.util;
  * 
  * CINVESTAV
  * 
- * Practica 1.
- * Middleware Distribuido
  * 
  * Autores:
  * 
@@ -19,7 +17,9 @@ package com.middleware.util;
  */
 import java.net.InetAddress;
 
-public interface Interruption {
+public interface MessageInterruption extends Interruption{
 
-	public void doInterruption (long processId);
+	public void doInterruption (long processId, byte [] message , InetAddress origin);
+	
+	public void doInterruption ( VideoInterface vp);
 }

@@ -5,16 +5,16 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
 
-import com.middleware.Middleware;
-import com.middleware.MiddlewareServer;
-import com.middleware.util.MSGTypes;
-import com.middleware.util.MessageInterruption;
-import com.middleware.util.VideoException;
-import com.middleware.util.VideoInterface;
-import com.middleware.util.VideoInterruption;
-import com.middleware.util.VideoPackage;
 import com.sharedstreamapp.R;
 import com.sstream.camera.CameraPreview;
+import com.sstream.middleware.Middleware;
+import com.sstream.middleware.MiddlewareServer;
+import com.sstream.middleware.util.MSGTypes;
+import com.sstream.middleware.util.MessageInterruption;
+import com.sstream.middleware.util.VideoException;
+import com.sstream.middleware.util.VideoInterface;
+import com.sstream.middleware.util.VideoInterruption;
+import com.sstream.middleware.util.VideoPackage;
 
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;

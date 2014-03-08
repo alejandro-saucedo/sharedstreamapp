@@ -1,6 +1,6 @@
-package com.middleware;
+package com.sstream.middleware;
 
-import com.middleware.util.Interruption;
+import com.sstream.middleware.util.Interruption;
 
 /**
  * Sistemas Distribuidos

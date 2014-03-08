@@ -1,4 +1,4 @@
-package com.middleware;
+package com.sstream.middleware;
 
 import java.io.Serializable;
 import java.lang.reflect.Array;

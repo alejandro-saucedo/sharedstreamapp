@@ -1,4 +1,4 @@
-package com.middleware;
+package com.sstream.middleware;
 
 /**
  * Sistemas Distribuidos
@@ -27,8 +27,8 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 
-import com.middleware.util.MessageInterruption;
-import com.middleware.util.VideoPackage;
+import com.sstream.middleware.util.MessageInterruption;
+import com.sstream.middleware.util.VideoPackage;
 
 public class MiddlewareServer extends Thread{
 

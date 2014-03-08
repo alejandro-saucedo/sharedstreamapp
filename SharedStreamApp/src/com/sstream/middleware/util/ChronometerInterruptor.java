@@ -1,4 +1,4 @@
-package com.middleware.util;
+package com.sstream.middleware.util;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -7,10 +7,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.middleware.Chronometer;
-import com.middleware.Middleware;
-import com.middleware.MiddlewareServer;
-import com.middleware.VideoContext;
+import com.sstream.middleware.Chronometer;
+import com.sstream.middleware.Middleware;
+import com.sstream.middleware.MiddlewareServer;
+import com.sstream.middleware.VideoContext;
 
 public class ChronometerInterruptor implements MessageInterruption {
 
