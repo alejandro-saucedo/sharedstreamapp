@@ -7,8 +7,10 @@ import java.util.List;
 
 import com.sharedstreamapp.R;
 import com.sstream.camera.CameraPreview;
+import com.sstream.middleware.Chronometer;
 import com.sstream.middleware.Middleware;
 import com.sstream.middleware.MiddlewareServer;
+import com.sstream.middleware.util.ChronometerInterruptor;
 import com.sstream.middleware.util.MSGTypes;
 import com.sstream.middleware.util.MessageInterruption;
 import com.sstream.middleware.util.VideoException;
@@ -131,6 +133,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 
 		try {
 			String ip = getIpAddr();
+			
 			InetAddress address = InetAddress.getByName(ip);
 			middleware = new Middleware(this, address);
 			middleware.createServerListener();
@@ -190,7 +193,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 	@Override
 	public void doInterruption(long processId, byte[] message,
 			InetAddress origin) {
-		// TODO Auto-generated method stub
+		//Log.v(TAG, new String (message));
 		
 	}
 
@@ -283,6 +286,25 @@ public class MainActivity extends Activity implements MessageInterruption {
 					
 					// Error handling for local server
 				}
+			}
+			
+		}
+		else if ( pck.getErrorCode() == MSGTypes.ERROR_TRY_AGAIN) {
+			Log.d(TAG, "Try Again");
+			
+			if ( false )  {// TO-DO, poner la funcion que regresa true|false si el android detecta dispositivo en la nube
+				
+				//try to Connect
+			} else { // wating for a new server
+				
+				
+				middleware.getVideoContext().setCoordinator( null );
+				VideoPackage vp = middleware.createGenericPacket(MSGTypes.TIMEOUT_WAITING_NEW_COORDINATOR);
+				Chronometer c = new Chronometer ( Chronometer.DEFAULT , Long.parseLong(vp.getMessageId()) );
+				
+				c.setInterruptionListener(new ChronometerInterruptor (c , vp , middleware ));
+				
+				c.startChronometer(Middleware.MAX_WAIT * 2 );
 			}
 			
 		}
