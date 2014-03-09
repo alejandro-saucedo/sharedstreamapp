@@ -169,7 +169,6 @@ public class ChronometerInterruptor implements MessageInterruption {
 						md.stopAndCleanTimer( vp.getMessageId() );
 						VideoContext vc = md.getVideoContext();
 						
-						
 						vc.setCoordinator( vc.getWaitQueue().get( vc.getNextCoordinatorIndex() - 1 ));
 						this.handleWaitingCoordinatorTimeout();
 						
@@ -188,10 +187,9 @@ public class ChronometerInterruptor implements MessageInterruption {
 						
 					} else {
 						
-						// handle if no all of the nodes send SERVER_DOWN Notifications
-						// for now try again
-						vp.setMessageType( MSGTypes.ERROR_TRY_AGAIN);
-						md.getMessageInterruption().doInterruption(vp);
+						VideoException ve = new VideoException (vp);
+						ve.setErrorCode( MSGTypes.ERROR_TRY_AGAIN);
+						md.getMessageInterruption().doInterruption(ve);
 						
 					}
 				break;
