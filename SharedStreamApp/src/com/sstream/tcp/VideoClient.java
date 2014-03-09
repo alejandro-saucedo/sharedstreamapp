@@ -5,22 +5,17 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.Socket;
+
+import android.util.Log;
 
 import com.sstream.camera.StreamPlayer;
 import com.sstream.util.Constants;
 import com.sstream.util.FilePathProvider;
 
-import android.hardware.Camera;
-import android.media.MediaPlayer;
-import android.util.Log;
-import android.view.SurfaceView;
-
 public class VideoClient {
 
 	public static final String TAG = VideoClient.class.getName();
-	private Camera camera = null;
 	private boolean receiving = false;
 	private StreamPlayer player = null;
 	private FilePathProvider fileManager = null;
@@ -57,9 +52,16 @@ public class VideoClient {
 		}
 	};
 
-	public VideoClient(StreamPlayer player, FilePathProvider fileManager) {
-		this.player = player;
+	public VideoClient(FilePathProvider fileManager) {
 		this.fileManager = fileManager;
+	}
+	
+	public void setPlayer(StreamPlayer player) {
+		this.player = player;
+	}
+	
+	public StreamPlayer getPlayer() {
+		return player;
 	}
 
 	public void connect(String host) {
@@ -127,6 +129,9 @@ public class VideoClient {
 		try{
 			currFileOut.write(data, 0, length);
 			currFileLength += length;
+			if(currFileLength >= Constants.MIN_PLAYABLE_FILE_SIZE && player != null){
+				player.addVideoFile(currFile);
+			}
 		}catch(IOException ex){
 			Log.e(TAG, "Problem writing to file", ex);
 		}
