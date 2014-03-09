@@ -1,12 +1,15 @@
 package com.sstream.tcp;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 
 import com.sstream.camera.StreamPlayer;
+import com.sstream.util.Constants;
 import com.sstream.util.FilePathProvider;
 
 import android.hardware.Camera;
@@ -24,6 +27,9 @@ public class VideoClient {
 	private String host = null;
 	private Socket socket = null;
 	private byte[] header = null;
+	private File currFile = null;
+	private OutputStream currFileOut = null;
+	private long currFileLength = 0;
 
 	private Runnable receiveProcess = new Runnable() {
 
@@ -60,6 +66,20 @@ public class VideoClient {
 		this.host = host;
 		Thread receiveThread = new Thread(receiveProcess);
 		receiveThread.start();
+	}
+	
+	public void filePlayed(File videoFile){
+		if(videoFile != null && !videoFile.equals(currFile)){
+			//TODO delete
+		}
+	}
+	
+	public File getCurFile(){
+		return currFile;
+	}
+	
+	public long getCurrFileLength() {
+		return currFileLength;
 	}
 	
 	private void readHeader(InputStream videoIn){
@@ -99,8 +119,40 @@ public class VideoClient {
 		}
 	}
 	
-	private void saveStream(byte[] data, int length){
-		
+	private void saveStream(byte[] data, int length) throws IOException{
+		if(currFile == null || currFileLength + length > Constants.MAX_FILE_SIZE){
+			closeCurrFileOut();
+			createNewFile();
+		}
+		try{
+			currFileOut.write(data, 0, length);
+			currFileLength += length;
+		}catch(IOException ex){
+			Log.e(TAG, "Problem writing to file", ex);
+		}
+	}
+	
+	private void createNewFile() throws IOException{
+		currFile = fileManager.createMediaFile(FilePathProvider.MEDIA_TYPE_VIDEO, Constants.VIDEO_FILE_EXTENSION);
+		currFileLength = 0;
+		try{
+			currFileOut = new FileOutputStream(currFile);
+		}catch(IOException ex){
+			Log.e(TAG, "Problem opening new file", ex);
+			throw ex;
+		}
+	}
+	
+	private void closeCurrFileOut(){
+		if(currFileOut != null){
+			try{
+				currFileOut.flush();
+				currFileOut.close();
+				currFileOut = null;
+			}catch(IOException ex){
+				Log.w(TAG, "Problem closing current file", ex);
+			}
+		}		
 	}
 
 }
