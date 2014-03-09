@@ -15,6 +15,7 @@ import com.sstream.middleware.util.VideoException;
 import com.sstream.middleware.util.VideoInterface;
 import com.sstream.middleware.util.VideoInterruption;
 import com.sstream.middleware.util.VideoPackage;
+import com.sstream.tcp.VideoServer;
 
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -41,7 +42,12 @@ public class MainActivity extends Activity implements MessageInterruption {
 	private boolean previewActive = false;
 	private Middleware middleware = null;
 	private Handler handler = null;
-
+	private VideoServer videoServer = null;
+	private boolean coordinating = false;
+	private boolean recording = false;
+	private boolean controlRequested = false;
+	
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -50,6 +56,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 		camera = getCamera();
 		createCameraPreview();
 		createMiddleware();
+		createVideoServer();
 	}
 	
 	@Override
@@ -138,9 +145,18 @@ public class MainActivity extends Activity implements MessageInterruption {
 		previewHolder.addView(preview);
 	}
 	
+	private void createVideoServer(){
+		try{
+			videoServer = new VideoServer();
+		}catch(IOException ex){
+			Log.e(TAG, "Problem creating video server", ex);
+		}
+	}
+	
 	public void onStartRecClicked(View view){
-		preview.openPreview();
-		previewActive = true;
+		videoServer.start();
+		preview.closePreview();
+		
 	}
 	
 	public void onRequestControlClicked(View view){
@@ -148,8 +164,21 @@ public class MainActivity extends Activity implements MessageInterruption {
 	}
 	
 	public void onStopRecClicked(View view){
-		preview.closePreview();
-		previewActive = false;
+		videoServer.pause();
+		preview.openPreview();
+	}
+	
+	
+	private void setButtonEnabled(final int buttonId, final boolean enabled){
+		handler.post(new Runnable() {
+			
+			@Override
+			public void run() {
+				Button button = (Button) findViewById(buttonId);
+				button.setEnabled(enabled);
+				
+			}
+		});
 	}
 
 	@Override
@@ -172,18 +201,6 @@ public class MainActivity extends Activity implements MessageInterruption {
 		} else if ( vp instanceof VideoException) {
 			processVideoException( (VideoException) vp);
 		}
-	}
-	
-	private void setButtonEnabled(final int buttonId, final boolean enabled){
-		handler.post(new Runnable() {
-			
-			@Override
-			public void run() {
-				Button button = (Button) findViewById(buttonId);
-				button.setEnabled(enabled);
-				
-			}
-		});
 	}
 	
 	
