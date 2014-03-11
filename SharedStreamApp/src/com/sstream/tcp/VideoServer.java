@@ -36,7 +36,7 @@ public class VideoServer {
 				LocalSocket localSocket = localServerSocket.accept();
 				streamVideo(localSocket.getInputStream());
 			}catch(IOException ex){
-				
+				ex.printStackTrace();
 			}
 		}
 	};
@@ -78,6 +78,7 @@ public class VideoServer {
 			streaming = true;
 			Thread localThread = new Thread(localServerProcess);
 			localThread.start();
+			try{Thread.sleep(100);}catch(InterruptedException ex){}
 			connectToLocalServer();
 		}else{
 			Log.i(TAG, "Server already streaming");
@@ -98,6 +99,7 @@ public class VideoServer {
 	}
 	
 	public FileDescriptor getFileDescriptor(){
+		Log.e(TAG, fileDesc.valid()+"");
 		return fileDesc;
 	}
 	
@@ -116,6 +118,9 @@ public class VideoServer {
 	private void addClient(Socket clientSocket){
 		try{
 			ClientSocketHolder client = new ClientSocketHolder(clientSocket);
+			if(header != null){
+				client.write(header, 0, header.length);
+			}
 			clients.add(client);
 		}catch(IOException ex){
 			Log.e(TAG, "Proble processing new client", ex);
@@ -136,6 +141,7 @@ public class VideoServer {
 					bytesRead += offset;
 					if(bytesRead > 0 && bytesRead % Constants.PACKET_SIZE == 0){
 						sendData(data, bytesRead);
+						offset = 0;
 					}else{
 						offset = bytesRead;
 					}
@@ -151,7 +157,7 @@ public class VideoServer {
 		int offset = 0;
 		int bytesRead = 0;
 		header = null;
-		while(header==null && (bytesRead = videoIn.read(data, offset, bytesRead)) >= 0){
+		while(header==null && (bytesRead = videoIn.read(data, offset, Constants.HEADER_SIZE-offset)) >= 0){
 			bytesRead += offset;
 			if(bytesRead == Constants.HEADER_SIZE){
 				header = data;

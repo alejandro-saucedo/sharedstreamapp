@@ -103,8 +103,8 @@ public class Middleware implements MessageInterruption{
 		
 		clock.start();
 		
-		this.setCoordinator( true );	
-		videoContext.setCoordinator( host );	
+		//this.setCoordinator( true );	
+		//videoContext.setCoordinator( host );	
 
 		videoContext.addNode( host ); // by default all contexts contains itself
 		

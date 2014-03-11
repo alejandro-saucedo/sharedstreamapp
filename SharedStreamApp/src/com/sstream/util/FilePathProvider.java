@@ -91,6 +91,10 @@ public class FilePathProvider {
 		
 		return prefix;
 	}
+	
+	public boolean delete(File file){
+		return file.delete();
+	}
 
 	
 }

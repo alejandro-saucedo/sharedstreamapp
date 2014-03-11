@@ -3,10 +3,13 @@ package com.sstream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.util.List;
 
 import com.sharedstreamapp.R;
 import com.sstream.camera.CameraPreview;
+import com.sstream.camera.StreamPlayer;
+import com.sstream.camera.StreamRecorder;
 import com.sstream.middleware.Chronometer;
 import com.sstream.middleware.Middleware;
 import com.sstream.middleware.MiddlewareServer;
@@ -17,7 +20,9 @@ import com.sstream.middleware.util.VideoException;
 import com.sstream.middleware.util.VideoInterface;
 import com.sstream.middleware.util.VideoInterruption;
 import com.sstream.middleware.util.VideoPackage;
+import com.sstream.tcp.VideoClient;
 import com.sstream.tcp.VideoServer;
+import com.sstream.util.FilePathProvider;
 
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
@@ -33,6 +38,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 
 public class MainActivity extends Activity implements MessageInterruption {
@@ -40,40 +46,49 @@ public class MainActivity extends Activity implements MessageInterruption {
 	private static final String TAG = MainActivity.class.getName();
 	private int cameraId = 1;
 	private Camera camera = null;
-	private CameraPreview preview = null;
+	//private CameraPreview preview = null;
 	private boolean previewActive = false;
 	private Middleware middleware = null;
 	private Handler handler = null;
 	private VideoServer videoServer = null;
+	private VideoClient videoClient = null;
+	private StreamRecorder recorder = null;
+	private StreamPlayer player = null;
 	private boolean coordinating = false;
 	private boolean recording = false;
 	private boolean controlRequested = false;
+	private FilePathProvider fileManager = null;
+	private SurfaceView surface = null;
 	
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
+		surface = (SurfaceView) findViewById(R.id.surfaceView1);
 		handler = new Handler();
 		camera = getCamera();
-		createCameraPreview();
+		//createCameraPreview();
 		createMiddleware();
 		createVideoServer();
+		fileManager = new FilePathProvider("SharedStreamApp");
+		EditText edit = (EditText) findViewById(R.id.hostEditText);
+		edit.setText("192.168.2.3");
 	}
 	
 	@Override
 	protected void onResume() {
 		super.onResume();
 		camera = getCamera();
-		if(previewActive){
-			preview.openPreview();
-		}
+//		if(previewActive){
+//			preview.openPreview();
+//		}
 	}
 	
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
-		preview.closePreview();
+		//preview.closePreview();
 		releaseCamera();
 	}
 
@@ -87,19 +102,19 @@ public class MainActivity extends Activity implements MessageInterruption {
 	@Override
 	protected void onSaveInstanceState(Bundle outState) {
 		super.onSaveInstanceState(outState);
-		outState.putBoolean("previewActive", previewActive);
+//		outState.putBoolean("previewActive", previewActive);
 	}
 
 	@Override
 	protected void onRestoreInstanceState(Bundle savedInstanceState) {
 		super.onRestoreInstanceState(savedInstanceState);
-		previewActive = savedInstanceState.getBoolean("previewActive");
+		//previewActive = savedInstanceState.getBoolean("previewActive");
 	}
 
 	public Camera getCamera(){
 		if(camera == null){
 			try {
-				camera = Camera.open(1);
+				camera = Camera.open(0);
 			} catch (Exception ex) {
 				Log.e(TAG, "Problem accessing camera", ex);
 			}
@@ -127,26 +142,29 @@ public class MainActivity extends Activity implements MessageInterruption {
 		   (ip >> 24 & 0xff));
 		   
 		   return ipString;
-		}
+	}
+	
+	public InetAddress getAddr() throws IOException{
+		String ip = getIpAddr();
+		return InetAddress.getByName(ip);
+	}
 
 	private void createMiddleware() {
 
 		try {
-			String ip = getIpAddr();
 			
-			InetAddress address = InetAddress.getByName(ip);
-			middleware = new Middleware(this, address);
+			middleware = new Middleware(this, getAddr());
 			middleware.createServerListener();
 		} catch (Exception ex) {
 			ex.printStackTrace();
 		}
 	}
 	
-	private void createCameraPreview(){
-		FrameLayout previewHolder = (FrameLayout) findViewById(R.id.frameLayout);
-		preview  = new CameraPreview(this, camera, cameraId);
-		previewHolder.addView(preview);
-	}
+//	private void createCameraPreview(){
+//		FrameLayout previewHolder = (FrameLayout) findViewById(R.id.frameLayout);
+//		preview  = new CameraPreview(this, camera, cameraId);
+//		previewHolder.addView(preview);
+//	}
 	
 	private void createVideoServer(){
 		try{
@@ -157,8 +175,25 @@ public class MainActivity extends Activity implements MessageInterruption {
 	}
 	
 	public void onStartRecClicked(View view){
-		videoServer.start();
-		preview.closePreview();
+		try {
+			coordinating = true;
+			middleware.setCoordinator(true);
+			middleware.getVideoContext().setCoordinator( getAddr() );
+			
+			if (videoServer == null) {
+				videoServer = new VideoServer();
+			}
+			videoServer.start();
+			//preview.closePreview();
+			if (recorder == null) {
+				recorder = new StreamRecorder(getCamera(), surface.getHolder(),
+						videoServer.getFileDescriptor());
+			}
+			recorder.record();
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
 		
 	}
 	
@@ -168,7 +203,24 @@ public class MainActivity extends Activity implements MessageInterruption {
 	
 	public void onStopRecClicked(View view){
 		videoServer.pause();
-		preview.openPreview();
+		//preview.openPreview();
+	}
+	
+	public void onConnectClicked(View view){
+		EditText edit = (EditText) findViewById(R.id.hostEditText);//192.168.2.2
+		String host = edit.getText().toString();
+		final VideoPackage vp = middleware.createGenericPacket(MSGTypes.NEW_MEMBER) ;
+		try {
+			final InetAddress node = InetAddress.getByName( host );
+			vp.setTargetNode(node);
+			(new Thread(){ public void run() {
+				try{
+			middleware.send( node , vp);}catch(Exception ex){ex.printStackTrace();}
+			}}).start();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		} 
+		
 	}
 	
 	
@@ -212,8 +264,17 @@ public class MainActivity extends Activity implements MessageInterruption {
 			//this.setEnableConnectButton( false );
 			setButtonEnabled( R.id.requestControlButton,  true );
 			setButtonEnabled( R.id.startRecButton,  false );
-			
+			setButtonEnabled( R.id.stopRecButton,  false );
+			//preview.closePreview();
 			//start playing video
+			if(videoClient == null){
+				videoClient = new VideoClient(fileManager);
+			}
+			if(player == null){
+				player = new StreamPlayer(videoClient, surface.getHolder());
+			}
+			videoClient.connect( pck.getVideoContext().getCoordinator().getHostAddress() );
+			
 			Log.d(TAG, "Playing video ...");
 		}
 		
@@ -239,8 +300,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.startRecButton,  false );
 			setButtonEnabled( R.id.stopRecButton,  false );
 			//serverError.setEnabled( false );
-		}
-		else if ( pck.getMessageType() == MSGTypes.RELEASE ) {
+		}else if ( pck.getMessageType() == MSGTypes.RELEASE ) {
 			setButtonEnabled( R.id.startRecButton,  true );
 			setButtonEnabled( R.id.stopRecButton,  false );
 			Log.d(TAG, "Stopped recording ...");

@@ -33,6 +33,7 @@ public class StreamRecorder {
 			throw new IllegalStateException("MediaRecorder has not been prepared");
 		}
 		
+		//(new Thread(){ public void run() {
 		try {
 			recorder.start();
 			recording = true;
@@ -43,6 +44,7 @@ public class StreamRecorder {
 			prepared = false;
 			releaseMediaRecorder();
 		}
+		//};}).start();
 	}
 	
 	public void pause(){
@@ -89,6 +91,8 @@ public class StreamRecorder {
 		// Step 4: Set output file		
 		recorder.setOutputFile(fd);
 		recorder.setOutputFormat(8);//MPEG4 ST
+		//recorder.setVideoEncodingBitRate(90);
+		
 		recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264);
 		
 		
