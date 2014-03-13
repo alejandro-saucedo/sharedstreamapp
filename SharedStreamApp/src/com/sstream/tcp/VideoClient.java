@@ -77,6 +77,9 @@ public class VideoClient {
 	
 	public void close(){
 		receiving = false;
+		try{
+			socket.close();
+		}catch(IOException ex){}
 	}
 	
 	public void filePlayed(File videoFile){
@@ -98,7 +101,7 @@ public class VideoClient {
 		int offset = 0;
 		int bytesRead = 0;
 		header = null;
-		int realHeaderSize = Constants.PACKET_SIZE*3;
+		int realHeaderSize = Constants.PACKET_SIZE*5;
 		try {
 			while (header == null && (bytesRead = videoIn.read(data, offset, Constants.HEADER_SIZE- offset)) >= 0) {
 				bytesRead += offset;

@@ -37,6 +37,17 @@ public class VideoServer {
 				streamVideo(localSocket.getInputStream());
 			}catch(IOException ex){
 				ex.printStackTrace();
+			}finally{
+				try{
+					localServerSocket.close();
+				}catch(IOException ex){
+					Log.w(TAG, "....");
+				}
+				try{
+					tcpServerSocket.close();
+				}catch(IOException ex){
+					Log.w(TAG, "....");
+				}
 			}
 		}
 	};
@@ -139,7 +150,7 @@ public class VideoServer {
 				int offset = 0;
 				int bytesRead = 0;
 
-				while ((bytesRead = videoIn.read(data, offset, Constants.DATA_BUFFER_SIZE - offset)) >= 0) {
+				while (streaming && (bytesRead = videoIn.read(data, offset, Constants.DATA_BUFFER_SIZE - offset)) >= 0) {
 					bytesRead += offset;
 					if(bytesRead > 0 && bytesRead % Constants.PACKET_SIZE == 0){
 						sendData(data, bytesRead);
@@ -151,6 +162,11 @@ public class VideoServer {
 			}
 		} catch (Exception ex) {
 			Log.e(TAG, "Problem sending video stream", ex);
+		}finally{
+			for(ClientSocketHolder client : clients){
+				client.close();
+			
+			}
 		}
 	}
 	

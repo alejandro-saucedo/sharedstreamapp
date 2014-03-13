@@ -212,6 +212,9 @@ public class MainActivity extends Activity implements MessageInterruption {
 			coordinating  = true;
 			coordinatorSet = true;
 			stopPlaying();
+			try{
+				Thread.sleep(1000);
+			}catch(InterruptedException ex){}
 			startRecording();
 			//serverError.setEnabled( false );
 			Log.d(TAG, "Recording ...");
@@ -232,17 +235,22 @@ public class MainActivity extends Activity implements MessageInterruption {
 			//serverError.setEnabled( false );
 			if(recording){
 				stopRecording();
+				try{
+					Thread.sleep(1000);
+				}catch(InterruptedException ex){}
+			}else{
+				try {
+					stopPlaying();
+					Thread.sleep(1000);
+				} catch (Exception ex) {
+					Log.e(TAG, "proble stopping playback", ex);
+				}
 			}
-			
-			stopPlaying();
 			startPlaying(pck.getVideoContext().getCoordinator().getHostAddress());
 			
 		}else if ( pck.getMessageType() == MSGTypes.RELEASE ) {
-			setButtonEnabled( R.id.startRecButton,  true );
-			setButtonEnabled( R.id.stopRecButton,  false );
-			
-			
-		
+			//setButtonEnabled( R.id.startRecButton,  true );
+			//setButtonEnabled( R.id.stopRecButton,  false );
 			Log.d(TAG, "Stopped recording ...");
 		}
 		
