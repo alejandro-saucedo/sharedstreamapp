@@ -35,6 +35,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_weight="0"
+                android:onClick="onRequestControlClicked"
                 android:text="Request Control" />
 
             <Button
@@ -78,11 +79,6 @@
             android:id="@+id/frameLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent" >
-
-            <SurfaceView
-                android:id="@+id/surfaceView1"
-                android:layout_width="fill_parent"
-                android:layout_height="fill_parent" />
 
         </FrameLayout>
 

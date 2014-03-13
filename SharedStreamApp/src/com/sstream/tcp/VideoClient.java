@@ -48,6 +48,10 @@ public class VideoClient {
 					}
 				} catch (Exception ex) {
 					Log.e(TAG, "Problem receiving stream", ex);
+				}finally{
+					try{
+						socket.close();
+					}catch(Exception ex){}
 				}
 			}
 		}
@@ -71,6 +75,10 @@ public class VideoClient {
 		receiveThread.start();
 	}
 	
+	public void close(){
+		receiving = false;
+	}
+	
 	public void filePlayed(File videoFile){
 		if(videoFile != null && !videoFile.equals(currFile)){
 			fileManager.delete(videoFile);
@@ -90,11 +98,14 @@ public class VideoClient {
 		int offset = 0;
 		int bytesRead = 0;
 		header = null;
+		int realHeaderSize = Constants.PACKET_SIZE*3;
 		try {
 			while (header == null && (bytesRead = videoIn.read(data, offset, Constants.HEADER_SIZE- offset)) >= 0) {
 				bytesRead += offset;
 				if(bytesRead == Constants.HEADER_SIZE){
-					header = data;
+					header = new byte[realHeaderSize];
+					//header = data;
+					System.arraycopy(data, 0, header, 0, realHeaderSize);
 				}else{
 					offset = bytesRead;
 				}
@@ -126,8 +137,7 @@ public class VideoClient {
 	private boolean currFileAdded = false;
 	
 	private void saveStream(byte[] data, int length) throws IOException{
-		if(currFile == null || currFileLength + length > Constants.MAX_FILE_SIZE){
-			closeCurrFileOut();
+		if(currFile == null){
 			createNewFile();
 		}
 		try{
@@ -138,6 +148,10 @@ public class VideoClient {
 				player.addVideoFile(currFile);
 				currFileAdded = true;
 			}
+			if(currFileLength >= Constants.MAX_FILE_SIZE){
+				closeCurrFileOut();
+				createNewFile();
+			}
 		}catch(IOException ex){
 			Log.e(TAG, "Problem writing to file", ex);
 		}
@@ -145,11 +159,11 @@ public class VideoClient {
 	
 	private void createNewFile() throws IOException{
 		currFile = fileManager.createMediaFile(FilePathProvider.MEDIA_TYPE_VIDEO, Constants.VIDEO_FILE_EXTENSION);
-		currFileLength = 0;
+		currFileLength = Constants.HEADER_SIZE;
 		currFileAdded = false;
 		try{
 			currFileOut = new FileOutputStream(currFile);
-			currFileOut.write(header);
+			currFileOut.write(header, 0, header.length);
 			currFileOut.flush();
 		}catch(IOException ex){
 			Log.e(TAG, "Problem opening new file", ex);
@@ -162,10 +176,11 @@ public class VideoClient {
 			try{
 				currFileOut.flush();
 				currFileOut.close();
-				currFileOut = null;
-				currFile = null;
 			}catch(IOException ex){
 				Log.w(TAG, "Problem closing current file", ex);
+			}finally{
+				currFileOut = null;
+				currFile = null;
 			}
 		}		
 	}

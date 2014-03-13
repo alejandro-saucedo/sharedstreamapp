@@ -29,6 +29,7 @@ import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.app.Activity;
+import android.graphics.Color;
 import android.hardware.Camera;
 import android.hardware.Camera.CameraInfo;
 import android.util.Log;
@@ -46,7 +47,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 	private static final String TAG = MainActivity.class.getName();
 	private int cameraId = 1;
 	private Camera camera = null;
-	//private CameraPreview preview = null;
+	private CameraPreview preview = null;
 	private boolean previewActive = false;
 	private Middleware middleware = null;
 	private Handler handler = null;
@@ -58,22 +59,21 @@ public class MainActivity extends Activity implements MessageInterruption {
 	private boolean recording = false;
 	private boolean controlRequested = false;
 	private FilePathProvider fileManager = null;
-	private SurfaceView surface = null;
+	
+	private boolean coordinatorSet = false;
 	
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
-		surface = (SurfaceView) findViewById(R.id.surfaceView1);
 		handler = new Handler();
 		camera = getCamera();
-		//createCameraPreview();
+		createCameraPreview();
 		createMiddleware();
-		createVideoServer();
 		fileManager = new FilePathProvider("SharedStreamApp");
 		EditText edit = (EditText) findViewById(R.id.hostEditText);
-		edit.setText("192.168.2.3");
+		edit.setText("192.168.2.2");
 	}
 	
 	@Override
@@ -160,82 +160,13 @@ public class MainActivity extends Activity implements MessageInterruption {
 		}
 	}
 	
-//	private void createCameraPreview(){
-//		FrameLayout previewHolder = (FrameLayout) findViewById(R.id.frameLayout);
-//		preview  = new CameraPreview(this, camera, cameraId);
-//		previewHolder.addView(preview);
-//	}
-	
-	private void createVideoServer(){
-		try{
-			videoServer = new VideoServer();
-		}catch(IOException ex){
-			Log.e(TAG, "Problem creating video server", ex);
-		}
-	}
-	
-	public void onStartRecClicked(View view){
-		try {
-			coordinating = true;
-			middleware.setCoordinator(true);
-			middleware.getVideoContext().setCoordinator( getAddr() );
-			
-			if (videoServer == null) {
-				videoServer = new VideoServer();
-			}
-			videoServer.start();
-			//preview.closePreview();
-			if (recorder == null) {
-				recorder = new StreamRecorder(getCamera(), surface.getHolder(),
-						videoServer.getFileDescriptor());
-			}
-			recorder.record();
-
-		} catch (IOException ex) {
-			ex.printStackTrace();
-		}
-		
-	}
-	
-	public void onRequestControlClicked(View view){
-		
-	}
-	
-	public void onStopRecClicked(View view){
-		videoServer.pause();
-		//preview.openPreview();
-	}
-	
-	public void onConnectClicked(View view){
-		EditText edit = (EditText) findViewById(R.id.hostEditText);//192.168.2.2
-		String host = edit.getText().toString();
-		final VideoPackage vp = middleware.createGenericPacket(MSGTypes.NEW_MEMBER) ;
-		try {
-			final InetAddress node = InetAddress.getByName( host );
-			vp.setTargetNode(node);
-			(new Thread(){ public void run() {
-				try{
-			middleware.send( node , vp);}catch(Exception ex){ex.printStackTrace();}
-			}}).start();
-		} catch (Exception ex) {
-			ex.printStackTrace();
-		} 
-		
+	private void createCameraPreview(){
+		FrameLayout previewHolder = (FrameLayout) findViewById(R.id.frameLayout);
+		preview  = new CameraPreview(this, camera, cameraId);
+		previewHolder.addView(preview);
 	}
 	
 	
-	private void setButtonEnabled(final int buttonId, final boolean enabled){
-		handler.post(new Runnable() {
-			
-			@Override
-			public void run() {
-				Button button = (Button) findViewById(buttonId);
-				button.setEnabled(enabled);
-				
-			}
-		});
-	}
-
 	@Override
 	public void doInterruption(long processId) {
 		// TODO Auto-generated method stub
@@ -267,13 +198,9 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.stopRecButton,  false );
 			//preview.closePreview();
 			//start playing video
-			if(videoClient == null){
-				videoClient = new VideoClient(fileManager);
-			}
-			if(player == null){
-				player = new StreamPlayer(videoClient, surface.getHolder());
-			}
-			videoClient.connect( pck.getVideoContext().getCoordinator().getHostAddress() );
+	
+			coordinatorSet = true;
+			startPlaying(pck.getVideoContext().getCoordinator().getHostAddress());
 			
 			Log.d(TAG, "Playing video ...");
 		}
@@ -282,6 +209,10 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.startRecButton,  false );
 			setButtonEnabled( R.id.stopRecButton,  true );
 			setButtonEnabled( R.id.requestControlButton,  false );
+			coordinating  = true;
+			coordinatorSet = true;
+			stopPlaying();
+			startRecording();
 			//serverError.setEnabled( false );
 			Log.d(TAG, "Recording ...");
 		}
@@ -289,20 +220,29 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.startRecButton,  true );
 			setButtonEnabled( R.id.stopRecButton,  false );
 			setButtonEnabled( R.id.requestControlButton,  false );
-			
+			coordinatorSet = false;
 			Log.d(TAG, "--> Coordinator position available, press start recording to stream video.");
 		}
-		else if ( pck.getMessageType() == MSGTypes.COORDINATOR_SETTED) {
-			
+		else if ( pck.getMessageType() == MSGTypes.COORDINATOR_SET) {
 			// connect to origin to stablish the socket tcp connection
 			Log.d(TAG, "Playing video ...");
 			setButtonEnabled( R.id.requestControlButton,  true );
 			setButtonEnabled( R.id.startRecButton,  false );
 			setButtonEnabled( R.id.stopRecButton,  false );
 			//serverError.setEnabled( false );
+			if(recording){
+				stopRecording();
+			}
+			
+			stopPlaying();
+			startPlaying(pck.getVideoContext().getCoordinator().getHostAddress());
+			
 		}else if ( pck.getMessageType() == MSGTypes.RELEASE ) {
 			setButtonEnabled( R.id.startRecButton,  true );
 			setButtonEnabled( R.id.stopRecButton,  false );
+			
+			
+		
 			Log.d(TAG, "Stopped recording ...");
 		}
 		
@@ -370,6 +310,146 @@ public class MainActivity extends Activity implements MessageInterruption {
 		}
 	}
 	
+	public void onStartRecClicked(View view){
+		try {
+			if(!coordinatorSet){
+				setButtonEnabled(R.id.startRecButton, false);
+				setButtonEnabled(R.id.requestControlButton, false);
+				setButtonEnabled(R.id.stopRecButton, true);
+				coordinatorSet = true;
+				coordinating = true;
+				middleware.setCoordinator(true);
+				middleware.getVideoContext().setCoordinator( getAddr() );
+				startRecording();
+			}else{
+				if (coordinating && recorder != null ) {
+					//this is the coordinator but 
+					recorder.record();
+				} else {
+					// TODO: request control
+					
+				}
+			}
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+		
+	}
+	
+	public void onRequestControlClicked(View view){
+		execAsync(new Runnable() {
+			
+			@Override
+			public void run() {
+				middleware.acquire();
+				
+			}
+		});
+	}
+	
+	public void onStopRecClicked(View view){
+		videoServer.pause();
+		execAsync(new Runnable() {
+			@Override
+			public void run() {
+				try{
+					middleware.release();
+				}catch(Exception ex){
+					Log.e(TAG, "Problem releasing control", ex);
+				}
+			}
+		});
+	}
+		
+	public void onConnectClicked(View view){
+		EditText edit = (EditText) findViewById(R.id.hostEditText);//192.168.2.2
+		String host = edit.getText().toString();
+		final VideoPackage vp = middleware.createGenericPacket(MSGTypes.NEW_MEMBER) ;
+		try {
+			final InetAddress node = InetAddress.getByName( host );
+			vp.setTargetNode(node);
+			(new Thread() {
+				public void run() {
+					try {
+						middleware.send(node, vp);
+					} catch (Exception ex) {
+						ex.printStackTrace();
+					}
+				}
+			}).start();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		} 
+		
+	}
+	
+	private void startRecording() {
+		try {
+			if (videoServer == null) {
+				videoServer = new VideoServer();
+			}
+			videoServer.start();
+			// preview.closePreview();
+			if (recorder == null) {
+				recorder = new StreamRecorder(getCamera(), preview.getHolder(), videoServer.getFileDescriptor());
+			}
+			recorder.record();
+			recording = true;
+		} catch (Exception ex) {
+			Log.e(TAG, "Problem trying to start recording", ex);
+		}
+	}
+	
+	private void stopRecording(){
+		if(recorder != null){
+			recorder.stop();
+		}
+		if(videoServer != null){
+			videoServer.close();
+		}
+		videoServer = null;
+		recorder = null;
+		recording = false;
+		releaseCamera();
+	}
+	
+	private void startPlaying(String host){
+		preview.closePreview();
+		videoClient = new VideoClient(fileManager);
+		player = new StreamPlayer(videoClient, preview.getHolder());
+		videoClient.connect( host );
+		
+	}
+	
+	
+	private void stopPlaying(){
+		if(player != null){
+			player.stop();
+		}
+		if(videoClient != null){
+			videoClient.close();
+		}
+		player = null;
+		videoClient = null;
+		releaseCamera();
 
+
+	}
+	
+	private void setButtonEnabled(final int buttonId, final boolean enabled){
+		handler.post(new Runnable() {			
+			@Override
+			public void run() {
+				Button button = (Button) findViewById(buttonId);
+				button.setEnabled(enabled);
+				
+			}
+		});
+	}
+
+	private void execAsync(Runnable runnable){
+		Thread t = new Thread(runnable);
+		t.start();
+	}
 	
 }

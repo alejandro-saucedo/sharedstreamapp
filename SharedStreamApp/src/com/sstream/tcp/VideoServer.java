@@ -121,7 +121,9 @@ public class VideoServer {
 			if(header != null){
 				client.write(header, 0, header.length);
 			}
-			clients.add(client);
+			synchronized (clients) {
+				clients.add(client);
+			}
 		}catch(IOException ex){
 			Log.e(TAG, "Proble processing new client", ex);
 		}
@@ -169,11 +171,25 @@ public class VideoServer {
 	}
 	
 	private void sendData(byte[] data, int lenght){
-		for (ClientSocketHolder client : clients) {
-			try {
-				client.write(data, 0, lenght);
-			} catch (IOException ex) {
-				clients.remove(client);
+		Collection<ClientSocketHolder> remClients = null;
+		synchronized (clients) {
+			for (ClientSocketHolder client : clients) {
+				try {
+					client.write(data, 0, lenght);
+				} catch (IOException ex) {
+					Log.w(TAG, "Error sending data to client:"+client.getHost(), ex);
+					if(remClients == null){
+						remClients = new LinkedList<ClientSocketHolder>();
+					}
+					remClients.add(client);
+				}
+			}
+			if(remClients != null){
+				for(ClientSocketHolder remClient : remClients){
+					Log.w(TAG, "Removing client:"+remClient.getHost());
+					clients.remove(remClient);
+				}
+				remClients.clear();
 			}
 		}
 	}

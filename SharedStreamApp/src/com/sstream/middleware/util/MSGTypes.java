@@ -16,7 +16,7 @@ package com.sstream.middleware.util;
  */
 public class MSGTypes {
 	
-	public static final int COORDINATOR_SETTED = -1; 
+	public static final int COORDINATOR_SET = -1; 
 	
 	public static final int COORDINATOR_RECORD_REQUIRE = -2; 
 	

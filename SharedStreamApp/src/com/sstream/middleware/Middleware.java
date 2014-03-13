@@ -340,7 +340,7 @@ public class Middleware implements MessageInterruption{
 		videoContext.setCoordinator(myServer.getHost());
 		this.stopAndCleanTimer(vp.getMessageId());
 
-		vp.setMessageType(MSGTypes.COORDINATOR_SETTED);
+		vp.setMessageType(MSGTypes.COORDINATOR_SET);
 		vp.setOriginNode(myServer.getHost());
 		vp.setVideoContext(this.videoContext);
 		this.setCoordinator(true);
@@ -545,7 +545,7 @@ public class Middleware implements MessageInterruption{
 						("Coordinator Position Available: " + origin.getHostAddress()).getBytes(), origin);
 				messageInterruptor.doInterruption( pck );
 			break;
-			case MSGTypes.COORDINATOR_SETTED :
+			case MSGTypes.COORDINATOR_SET :
 				updateContext(origin, pck.getVideoContext() );
 				messageInterruptor.doInterruption(processId, 
 						("Coordinator Setted , updating connection socket: " + origin.getHostAddress()).getBytes(), origin);

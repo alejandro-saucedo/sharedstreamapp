@@ -104,7 +104,7 @@ public class CameraPreview extends SurfaceView implements Callback {
 	private void startPreview(final SurfaceHolder holder){
 		try {
 			camera.setPreviewDisplay(holder);
-			camera.startPreview();
+			//camera.startPreview();
 			previewInProgress = true;
 		} catch (Exception ex) {
 			Log.e(TAG, "Problem starting destroyed with new holder", ex);
@@ -115,7 +115,7 @@ public class CameraPreview extends SurfaceView implements Callback {
 	private void stopPreview(){
 		if(camera != null){
 			try{
-				camera.stopPreview();
+				//camera.stopPreview();
 				previewInProgress = false;
 			}catch(Exception ex){
 				Log.e(TAG, "Problem stopping destroyed", ex);

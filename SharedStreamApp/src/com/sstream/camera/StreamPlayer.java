@@ -51,6 +51,10 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 		synchronized (videoQueue) {
 			state = STATE_STOPPED;
 			mediaPlayer.stop();
+			while(!videoQueue.isEmpty()){
+				videoSrc.filePlayed(videoQueue.poll());
+			}
+			mediaPlayer.release();
 		}
 	}
 	
@@ -68,34 +72,36 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 
 	@Override
 	public void onCompletion(MediaPlayer mp) {
-		long fileLength = currVideo.length();
-		if(fileLength+Constants.MIN_PLAYABLE_FILE_SIZE >= Constants.MAX_FILE_SIZE){
-			//move to next file in queue if any
-			synchronized(videoQueue){
-				//dispose played file
-				videoSrc.filePlayed(currVideo);
-				//get next file to play
-				currVideo = videoQueue.poll();
-				seekPosition = 0;
-				if(currVideo == null){
-					state = STATE_READY;
-				}else{
-					prepareMediaPlayer(currVideo);
+		if (state == STATE_PLAYING) {
+			long fileLength = currVideo.length();
+			if (fileLength + Constants.MIN_PLAYABLE_FILE_SIZE >= Constants.MAX_FILE_SIZE) {
+				// move to next file in queue if any
+				synchronized (videoQueue) {
+					// dispose played file
+					// videoSrc.filePlayed(currVideo);
+					// get next file to play
+					currVideo = videoQueue.poll();
+					seekPosition = 0;
+					if (currVideo == null) {
+						state = STATE_READY;
+					} else {
+						prepareMediaPlayer(currVideo);
+					}
 				}
-			}
-		}else{
-			int delay = 0;
-			//wait for the file to load
-			while( currVideo.length()-fileLength < Constants.MIN_PLAYABLE_FILE_SIZE ){
-				try{
-					Thread.sleep(WAIT_TIME);
-					delay += WAIT_TIME;
-				}catch(InterruptedException ex){
-					ex.printStackTrace();
+			} else {
+				int delay = 0;
+				// wait for the file to load
+				while (currVideo.length() - fileLength < Constants.MIN_PLAYABLE_FILE_SIZE) {
+					try {
+						Thread.sleep(WAIT_TIME);
+						delay += WAIT_TIME;
+					} catch (InterruptedException ex) {
+						ex.printStackTrace();
+					}
 				}
+				seekPosition += delay;
+				prepareMediaPlayer(currVideo);
 			}
-			seekPosition += delay;
-			prepareMediaPlayer(currVideo);
 		}
 	}
 
@@ -135,7 +141,14 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 			whatStr = what+"";	
 		}
 		Log.e(TAG, "MediaPlayer OnError: what="+whatStr+" , extra="+extra);
-		return true;
+		synchronized (videoQueue) {
+
+			//mediaPlayer.stop();
+			//mediaPlayer.reset();
+			//state = STATE_READY;
+			//currVideo = null;
+		}
+		return false;
 	}
 
 	private void prepareMediaPlayer(File videoFile) {
