@@ -66,6 +66,16 @@ public class ChronometerInterruptor implements MessageInterruption {
 			}
 			
 		}
+		else if ( c.getType() == Chronometer.PERIODIC) {
+			switch (vp.getMessageType()) {
+				case MSGTypes.WATCHDOG_TIMEOUT:
+					md.setWatchDog( true ); // I am the watchdog now
+					md.getChronometers().get(Middleware.WATCHDOG_KEY).reset();
+					System.out.println ("WatchDog !");
+				break;
+			}
+		}
+		
 		else if ( c.getType() == Chronometer.DEFAULT) {
 			
 			List<InetAddress> nodes;
@@ -127,25 +137,19 @@ public class ChronometerInterruptor implements MessageInterruption {
 						
 					break;
 					
-				case MSGTypes.ACQUIRE:
+				case MSGTypes.START_RECORDING:
 					// do nothing for now
 					pending 	= md.getPendingMap().get(vp.getMessageId()).getWaitingNodes();
 					
 					md.getChronometers().remove(vp.getMessageId());
 					md.getPendingMap().remove(vp.getMessageId());
+					md.setWaitingStartRecordResponses( false );
 					
-					if ( pending == 1) { //Single node connected / first case
+					VideoException err = new VideoException( vp );
+					err.setErrorCode(MSGTypes.START_RECORDVIDEO_NOT_POSIBLE);
 						
-						md.assignCoordinator( vp );
-						md.getMessageInterruption().doInterruption(0, "Became itself coordinator".getBytes(), null);
-					} 
+					md.getMessageInterruption().doInterruption( err );
 					
-					else { // another node is streaming video.
-						VideoException ve = new VideoException( vp );
-						ve.setErrorCode(MSGTypes.ACQUIRE_VIDEO_NOT_POSIBLE);
-						
-						md.getMessageInterruption().doInterruption( ve );
-					}
 					
 					
 				break;

@@ -262,8 +262,8 @@ public class MainActivity extends Activity implements MessageInterruption {
 				
 			}
 		}
-		else if ( pck.getErrorCode() == MSGTypes.ACQUIRE_VIDEO_NOT_POSIBLE) {
-			Log.d(TAG, "Acquire video not posible, put on wait list ...");
+		else if ( pck.getErrorCode() == MSGTypes.START_RECORDVIDEO_NOT_POSIBLE) {
+			Log.d(TAG, "Start record video not posible, put on wait list ...");
 			
 		}
 		else if ( pck.getErrorCode() == MSGTypes.NO_NEXT_COORDINATOR_WARNING ) {

@@ -45,6 +45,7 @@ public class Middleware implements MessageInterruption{
 	
 	public static final int MAX_WAIT = 3; // seconds
 	public static  final String SERVER_DOWN_KEY = "Server.down.key";
+	public static  final String WATCHDOG_KEY = "Watchdog.key";
 	
 	
 	private static final int CHRONOMETER_UPDATE_TIME = MAX_WAIT * 6; //seconds
@@ -63,11 +64,11 @@ public class Middleware implements MessageInterruption{
 	private MiddlewareServer 				myServer ;
 	private Berkeley						berkeley;
 	
-	private boolean isCoordinator = false;
-	private boolean isWaitingForCoordinator = false;
+	private boolean isCoordinator 					= false;
+	private boolean isWaitingForCoordinator 		= false;
+	private boolean isWaitingStartRecordResponses 	= false;
 	
-	
-	
+	private boolean isWatchDog						= false;
 
 	private class MyClock extends Thread {
 		
@@ -102,11 +103,13 @@ public class Middleware implements MessageInterruption{
 		messageInterruptor = itr; // external call-backs
 		
 		clock.start();
+		isWatchDog = true;
 		
 		//this.setCoordinator( true );	
 		//videoContext.setCoordinator( host );	
 
 		videoContext.addNode( host ); // by default all contexts contains itself
+		createWatchDogChronometer ();
 		
 	}
 	
@@ -121,6 +124,17 @@ public class Middleware implements MessageInterruption{
 	}
 	
 			
+	private Chronometer createWatchDogChronometer ( ) {
+		
+		VideoPackage vp = this.createGenericPacket(MSGTypes.WATCHDOG_TIMEOUT);
+		Chronometer c = new Chronometer ( Chronometer.PERIODIC , Long.parseLong(vp.getMessageId())  , 2);
+			
+		c.setInterruptionListener(new ChronometerInterruptor (c , vp , this ));
+		chronometers.put(Middleware.WATCHDOG_KEY, c);
+		
+		c.startChronometer(Middleware.CHRONOMETER_UPDATE_TIME *  this.getVideoContext().getNodes().size()  + Middleware.MAX_WAIT);
+		return c ;
+	}
 	
 	private void createWaitingChronometer (VideoPackage vp , int time , int waitingNodes) {
 		
@@ -216,8 +230,9 @@ public class Middleware implements MessageInterruption{
 			
 			if ( waitNodes <= 0) {
 				
-				if (original.getMessageType() == MSGTypes.ACQUIRE) {
+				if (original.getMessageType() == MSGTypes.START_RECORDING) {
 					this.assignCoordinator(vp);
+					isWaitingStartRecordResponses = false;
 				}
 				else if ( original.getMessageType() == MSGTypes.RELEASE ) {
 					
@@ -273,10 +288,10 @@ public class Middleware implements MessageInterruption{
 				waitQueue.add(i, origin);
 			}
 		}
-		if ( coord.getHostAddress().equals("127.0.0.1")) {
+		if (coord != null && coord.getHostAddress().equals("127.0.0.1")) {
 			coord = origin;
 		}
-		videoContext.setCoordinator( origin );
+		videoContext.setCoordinator( coord );
 		videoContext.setNodes( (CopyOnWriteArrayList<InetAddress>)nodes );
 		videoContext.setWaitQueue( (CopyOnWriteArrayList<InetAddress>) waitQueue );
 		videoContext.setGlobalTIme( vc.getGlobalTime());
@@ -344,6 +359,7 @@ public class Middleware implements MessageInterruption{
 		vp.setOriginNode(myServer.getHost());
 		vp.setVideoContext(this.videoContext);
 		this.setCoordinator(true);
+		this.setWatchDog( false );
 		
 		List<InetAddress> nodes = videoContext.getNodes();
 		
@@ -424,6 +440,30 @@ public class Middleware implements MessageInterruption{
 		}
 	}
 	
+	public void startRecord ( ) {
+		VideoPackage vp = createGenericPacket(MSGTypes.START_RECORDING);	
+		
+		try {
+			isWaitingStartRecordResponses = true;
+			sendToAll(vp);
+			this.createWaitingChronometer(vp, MAX_WAIT * 2, videoContext.getNodes().size()   );
+			
+		} catch (UnknownHostException e1) {
+			VideoException ve = new VideoException ( vp );
+			ve.setErrorCode(MSGTypes.CANT_CONNECT_ERROR);
+			ve.setStackTrace(e1.getStackTrace());
+			
+			messageInterruptor.doInterruption( ve );
+			
+		} catch (IOException e1) {
+			VideoException ve = new VideoException ( vp );
+			ve.setErrorCode(MSGTypes.CANT_CONNECT_ERROR);
+			ve.setStackTrace(e1.getStackTrace());
+			
+			messageInterruptor.doInterruption( ve );
+			
+		}	
+	}
 	public void acquire ( ) {
 		VideoPackage vp = createGenericPacket(MSGTypes.ACQUIRE);
 		
@@ -519,10 +559,13 @@ public class Middleware implements MessageInterruption{
 
 			case MSGTypes.NEW_CONTEXT  :
 				
-					updateContext(origin, pck.getVideoContext() );
-					messageInterruptor.doInterruption(processId, 
+				isWatchDog = false;
+				updateContext(origin, pck.getVideoContext() );
+				chronometers.get(Middleware.WATCHDOG_KEY).setLimit(Middleware.CHRONOMETER_UPDATE_TIME *  
+						this.getVideoContext().getNodes().size()  + Middleware.MAX_WAIT);
+				messageInterruptor.doInterruption(processId, 
 							("-->New Context set from: " + origin.getHostAddress()).getBytes(), origin);
-					messageInterruptor.doInterruption( pck );
+				messageInterruptor.doInterruption( pck );
 				
 			break;
 			case MSGTypes.NEW_MEMBER :
@@ -592,6 +635,7 @@ public class Middleware implements MessageInterruption{
 				this.setGlobalTime(globalTime + adjustment);
 				messageInterruptor.doInterruption(0, ("--> New setted clock: " 
 							+ globalTime + ",Adjustment->" + adjustment).getBytes(), null);
+				chronometers.get(Middleware.WATCHDOG_KEY).reset();
 				
 			break;
 			
@@ -600,6 +644,30 @@ public class Middleware implements MessageInterruption{
 				pck.setOriginNode( myServer.getHost() );
 				pck.setTargetNode( origin );
 				this.send( origin, pck);
+			break;
+			case MSGTypes.START_RECORDING:
+
+				if (this.getVideoContext().getCoordinator() == null) {
+					pck.setMessageType(MSGTypes.ACK);
+					pck.setOriginNode(myServer.getHost());
+					pck.setTargetNode(origin);
+
+					if (!this.isWaitingStartRecordResponses || MiddlewareServer.isLocalAddress( origin ) ) {
+
+						messageInterruptor.doInterruption(processId,
+								("-->Sending ACK: " + origin.getHostAddress()
+										+ ", ID=" + pck.getMessageId())
+										.getBytes(), origin);
+
+						this.send(origin, pck);
+					} else {
+
+						if (Middleware.globalTime > pck.getGlobalTime()) {
+							this.send(origin, pck);
+						}
+					}
+				}
+				
 			break;
 			case MSGTypes.ACQUIRE:
 				messageInterruptor.doInterruption(processId, 
@@ -629,26 +697,7 @@ public class Middleware implements MessageInterruption{
 							}
 						}
 					}
-				}/*else { 
-					
-					pck.setMessageType(MSGTypes.ACK);
-					pck.setOriginNode( myServer.getHost());
-					pck.setTargetNode( origin );
-					
-					if ( !this.isWaitingAcquireResponses || 
-							origin.getHostAddress().equals(myServer.getHost().getHostAddress())) {
-						messageInterruptor.doInterruption(processId, 
-								("-->Sending ACK: " + origin.getHostAddress() +   ", ID=" + pck.getMessageId() ).getBytes(), origin);
-						
-						this.send( origin, pck);	
-					}else {
-					
-						if ( Middleware.globalTime > pck.getGlobalTime()) {
-							this.send( origin, pck);
-						}
-					}
-					
-				}*/
+				}
 			break;
 			
 			
@@ -698,7 +747,7 @@ public class Middleware implements MessageInterruption{
 	public void doInterruption(long processId) { 
 		
 		
-		if ( this.isCoordinator()) {
+		if ( this.isCoordinator() || isWatchDog) {
 			
 			VideoPackage vp = createGenericPacket(MSGTypes.REQUEST_GLOBAL_CLOCK);
 			List<InetAddress> nodes = videoContext.getNodes();
@@ -771,11 +820,15 @@ public class Middleware implements MessageInterruption{
 		this.isCoordinator = isCoordinator;
 	}
 	
-	
+	public void setWaitingStartRecordResponses(boolean isWaitingStartRecordResponses) {
+		this.isWaitingStartRecordResponses = isWaitingStartRecordResponses;
+	}
 	public void setWaitingForCoordinator(boolean u) {
 		this.isWaitingForCoordinator = u;
 	}
-
+	public void setWatchDog(boolean isWatchDog) {
+		this.isWatchDog = isWatchDog;
+	}
 	public boolean isWaitingForCoordinator() {
 		return isWaitingForCoordinator;
 	}

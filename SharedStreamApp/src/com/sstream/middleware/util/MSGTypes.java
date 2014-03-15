@@ -46,9 +46,9 @@ public class MSGTypes {
 	
 	public static final int NEW_CONTEXT = -15;
 	
-	public static final int NEW_CONNECTED_NODE = -16;
+	public static final int START_RECORDING = -16;
 	
-	public static final int ACQUIRE_VIDEO_NOT_POSIBLE = -17; 
+	public static final int START_RECORDVIDEO_NOT_POSIBLE = -17; 
 	
 	public static final int OK_START_RECORDING = -18; 
 	
@@ -56,6 +56,7 @@ public class MSGTypes {
 	
 	public static final int COORDINATOR_POSITION_AVAILABLE = -20; 
 	
+	public static final int WATCHDOG_TIMEOUT = -21; 
 	// Clock 
 	
 	public static final int REQUEST_GLOBAL_CLOCK = -30;

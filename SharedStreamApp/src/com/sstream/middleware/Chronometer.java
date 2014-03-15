@@ -169,6 +169,12 @@ public class Chronometer  extends Thread{
     	this.processId = p;
     }
     
+    public void reset () {
+    	time = 0;
+    }
+    public void setLimit (int limit ) {
+    	this.limit = limit;
+    }
     public boolean hasReachedMaxExecutions() {
     	return this.getTimesExecuted() == this.getMaxExecutionTimes();
     }
