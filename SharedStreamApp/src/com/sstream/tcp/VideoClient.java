@@ -21,10 +21,9 @@ public class VideoClient {
 	private FilePathProvider fileManager = null;
 	private String host = null;
 	private Socket socket = null;
-	private byte[] header = null;
 	private File currFile = null;
 	private OutputStream currFileOut = null;
-	private long currFileLength = 0;
+	private byte streamFlag = 0;
 
 	private Runnable receiveProcess = new Runnable() {
 
@@ -40,11 +39,8 @@ public class VideoClient {
 			}
 			if (videoIn != null) {
 				try {
-					readHeader(videoIn);
-					if (header != null) {
-						while (receiving && socket.isConnected()) {
-							receiveStream(videoIn);
-						}
+					while (receiving && socket.isConnected()) {
+						receiveStream(videoIn);
 					}
 				} catch (Exception ex) {
 					Log.e(TAG, "Problem receiving stream", ex);
@@ -57,8 +53,9 @@ public class VideoClient {
 		}
 	};
 
-	public VideoClient(FilePathProvider fileManager) {
+	public VideoClient(FilePathProvider fileManager, StreamPlayer player) {
 		this.fileManager = fileManager;
+		this.player = player;
 	}
 	
 	public void setPlayer(StreamPlayer player) {
@@ -76,45 +73,12 @@ public class VideoClient {
 	}
 	
 	public void close(){
+		player.stop();
 		receiving = false;
 		try{
 			socket.close();
-		}catch(IOException ex){}
-	}
-	
-	public void filePlayed(File videoFile){
-		if(videoFile != null && !videoFile.equals(currFile)){
-			fileManager.delete(videoFile);
-		}
-	}
-	
-	public File getCurFile(){
-		return currFile;
-	}
-	
-	public long getCurrFileLength() {
-		return currFileLength;
-	}
-	
-	private void readHeader(InputStream videoIn){
-		byte[] data = new byte[Constants.HEADER_SIZE];
-		int offset = 0;
-		int bytesRead = 0;
-		header = null;
-		int realHeaderSize = Constants.PACKET_SIZE*5;
-		try {
-			while (header == null && (bytesRead = videoIn.read(data, offset, Constants.HEADER_SIZE- offset)) >= 0) {
-				bytesRead += offset;
-				if(bytesRead == Constants.HEADER_SIZE){
-					header = new byte[realHeaderSize];
-					//header = data;
-					System.arraycopy(data, 0, header, 0, realHeaderSize);
-				}else{
-					offset = bytesRead;
-				}
-			}
-		} catch (IOException ex) {
-			Log.e(TAG, "Problem reading header", ex);
+		}catch(IOException ex){
+			socket = null;
 		}
 	}
 
@@ -125,36 +89,32 @@ public class VideoClient {
 		try {
 			while (receiving && (bytesRead = videoIn.read(data, offset, Constants.DATA_BUFFER_SIZE - offset)) >= 0) {
 				bytesRead += offset;
-				if(bytesRead > 0 && bytesRead % Constants.PACKET_SIZE == 0){
-					saveStream(data, bytesRead);
+				if(bytesRead == Constants.DATA_BUFFER_SIZE){
+					if(data[0] != streamFlag || currFile == null){
+						streamFlag = data[0];
+						player.stop();
+						closeCurrFileOut();
+						createNewFile();
+						player.start(currFile);
+					}
+					saveStream(data, 1, data.length-1);
 					offset = 0;
 				}else{
 					offset = bytesRead;
 				}
 			}
 		} catch (IOException ex) {
-			Log.e(TAG, "Problem receiving stream", ex);
+			if(receiving){
+				Log.e(TAG, "Problem receiving stream", ex);
+			}
 		}
 	}
 	
-	private boolean currFileAdded = false;
 	
-	private void saveStream(byte[] data, int length) throws IOException{
-		if(currFile == null){
-			createNewFile();
-		}
+	private void saveStream(byte[] data, int offset, int length) throws IOException{
 		try{
-			currFileOut.write(data, 0, length);
+			currFileOut.write(data, offset, length);
 			currFileOut.flush();
-			currFileLength += length;
-			if(!currFileAdded && currFileLength >= Constants.MIN_PLAYABLE_FILE_SIZE && player != null){
-				player.addVideoFile(currFile);
-				currFileAdded = true;
-			}
-			if(currFileLength >= Constants.MAX_FILE_SIZE){
-				closeCurrFileOut();
-				createNewFile();
-			}
 		}catch(IOException ex){
 			Log.e(TAG, "Problem writing to file", ex);
 		}
@@ -162,12 +122,8 @@ public class VideoClient {
 	
 	private void createNewFile() throws IOException{
 		currFile = fileManager.createMediaFile(FilePathProvider.MEDIA_TYPE_VIDEO, Constants.VIDEO_FILE_EXTENSION);
-		currFileLength = Constants.HEADER_SIZE;
-		currFileAdded = false;
 		try{
 			currFileOut = new FileOutputStream(currFile);
-			currFileOut.write(header, 0, header.length);
-			currFileOut.flush();
 		}catch(IOException ex){
 			Log.e(TAG, "Problem opening new file", ex);
 			throw ex;

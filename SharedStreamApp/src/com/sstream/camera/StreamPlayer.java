@@ -7,6 +7,7 @@ import java.util.Queue;
 import android.media.MediaPlayer;
 import android.util.Log;
 import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 
 import com.sstream.tcp.VideoClient;
 import com.sstream.util.Constants;
@@ -15,101 +16,99 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 		MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
 
 	private static final String TAG = StreamPlayer.class.getName();
-	private static final int STATE_READY = 1;
-	private static final int STATE_PLAYING = 2;
-	private static final int STATE_STOPPED = 3;
-	private static final long WAIT_TIME = 50;
-	private VideoClient videoSrc = null;
+	private static long WAIT_TIME = 100;
+
 	private MediaPlayer mediaPlayer = null;
-	private SurfaceHolder holder = null;
+	private SurfaceView surface = null;
 	private int seekPosition = 0;
-	private File currVideo = null;
-	private Queue<File> videoQueue = null;
-	private volatile int state = 0;
+	private File video = null;
+	private volatile boolean playback = false;
+	private long lastFileLengh = 0;
+	private long playbackStartTime = 0;
+	private long playbackEndTime = 0;
 	
-	public StreamPlayer(VideoClient videoSrc, SurfaceHolder holder){
-		this.videoSrc = videoSrc;
-		this.holder = holder;
+	public StreamPlayer(SurfaceView surface){
+		this.surface = surface;
 		mediaPlayer = new MediaPlayer();
-		state = STATE_READY;
-		videoQueue = new LinkedList<File>();
-		videoSrc.setPlayer(this);
 	}
 
-	public void start(){
-		synchronized (videoQueue) {
-			state = STATE_READY;
-			currVideo = videoQueue.poll();
-			if(currVideo != null){
-				state = STATE_PLAYING;
-				prepareMediaPlayer(currVideo);
-			}
-		}
+	public synchronized void start(File video){
+		this.video = video;
+		mediaPlayer = new MediaPlayer();
+		seekPosition = 0;
+		playback = true;
+		(new Thread(){ public void run() { prepareMediaPlayer();}}).start();
 	}
 	
 	public void stop(){
-		synchronized (videoQueue) {
-			state = STATE_STOPPED;
-			mediaPlayer.stop();
-			while(!videoQueue.isEmpty()){
-				videoSrc.filePlayed(videoQueue.poll());
+		playback = false;
+		synchronized (this) {
+			if(mediaPlayer != null){
+				try{
+					mediaPlayer.stop();
+				}catch(Exception ex){
+					Log.w(TAG, "Problem stopping mediaplayer");
+				}
+				try{
+					mediaPlayer.release();
+				}catch(Exception ex){
+					Log.w(TAG, "Problem releasing media player");
+				}
+				
+				mediaPlayer = null;
 			}
-			mediaPlayer.release();
 		}
 	}
 	
-	public void addVideoFile(File videoFile) {
-
-		synchronized (videoQueue) {
-			videoQueue.add(videoFile);
-			if(currVideo == null && state == STATE_READY){
-				state = STATE_PLAYING;
-				currVideo = videoQueue.poll();
-				prepareMediaPlayer(currVideo);
+	private synchronized void prepareMediaPlayer(){
+		long buffTime = buffering();
+		if(playback){
+			try {
+				//seekPosition += buffTime;
+				mediaPlayer.reset();
+				mediaPlayer.setDataSource(video.getAbsolutePath());
+				mediaPlayer.setDisplay(surface.getHolder());
+				mediaPlayer.setOnCompletionListener(this);
+				mediaPlayer.setOnPreparedListener(this);
+				mediaPlayer.setOnErrorListener(this);
+				mediaPlayer.prepareAsync();
+			} catch (Exception ex) {
+				Log.e(TAG, "Problem preparing media mediaPlayer", ex);
 			}
 		}
+	}
+	
+	private long buffering(){
+		long buffTime = 0;;
+		while (playback && (video.length() - lastFileLengh) < Constants.MIN_PLAYABLE_FILE_SIZE){
+			Log.d(TAG, "Buffering....");
+			try{
+				Thread.sleep(WAIT_TIME);
+				buffTime += WAIT_TIME;
+			}catch(InterruptedException ex){}
+		}
+		return buffTime;
 	}
 
 	@Override
 	public void onCompletion(MediaPlayer mp) {
-		if (state == STATE_PLAYING) {
-			long fileLength = currVideo.length();
-			if (fileLength + Constants.MIN_PLAYABLE_FILE_SIZE >= Constants.MAX_FILE_SIZE) {
-				// move to next file in queue if any
-				synchronized (videoQueue) {
-					// dispose played file
-					// videoSrc.filePlayed(currVideo);
-					// get next file to play
-					currVideo = videoQueue.poll();
-					seekPosition = 0;
-					if (currVideo == null) {
-						state = STATE_READY;
-					} else {
-						prepareMediaPlayer(currVideo);
-					}
-				}
-			} else {
-				int delay = 0;
-				// wait for the file to load
-				while (currVideo.length() - fileLength < Constants.MIN_PLAYABLE_FILE_SIZE) {
-					try {
-						Thread.sleep(WAIT_TIME);
-						delay += WAIT_TIME;
-					} catch (InterruptedException ex) {
-						ex.printStackTrace();
-					}
-				}
-				seekPosition += delay;
-				prepareMediaPlayer(currVideo);
+		playbackEndTime = System.currentTimeMillis() - playbackStartTime;
+		if(playback){
+			int currPos = mp.getCurrentPosition();
+			if(currPos > 0){
+				seekPosition = currPos;
+			}else{
+				seekPosition += playbackEndTime - 1000;
 			}
+			prepareMediaPlayer();
 		}
 	}
 
 	@Override
 	public void onPrepared(MediaPlayer mp) {
-		mediaPlayer.seekTo(seekPosition);
-		state = STATE_PLAYING;
 		mediaPlayer.start();
+		mediaPlayer.seekTo(seekPosition);
+		playbackStartTime = System.currentTimeMillis();
 	}
 
 	@Override
@@ -141,29 +140,8 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 			whatStr = what+"";	
 		}
 		Log.e(TAG, "MediaPlayer OnError: what="+whatStr+" , extra="+extra);
-		synchronized (videoQueue) {
 
-			//mediaPlayer.stop();
-			//mediaPlayer.reset();
-			//state = STATE_READY;
-			//currVideo = null;
-		}
-		return false;
+		return true;
 	}
 
-	private void prepareMediaPlayer(File videoFile) {
-		try {
-			mediaPlayer.reset();
-			mediaPlayer.setDataSource(videoFile.getAbsolutePath());
-			mediaPlayer.setDisplay(holder);
-			mediaPlayer.setOnCompletionListener(this);
-			mediaPlayer.setOnPreparedListener(this);
-			mediaPlayer.setOnErrorListener(this);
-			mediaPlayer.prepareAsync();
-		} catch (Exception ex) {
-			Log.e(TAG, "Problem preparing media mediaPlayer", ex);
-			currVideo = null;
-			state = STATE_READY;
-		}
-	}
 }

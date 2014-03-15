@@ -53,8 +53,6 @@ public class MainActivity extends Activity implements MessageInterruption {
 	private Handler handler = null;
 	private VideoServer videoServer = null;
 	private VideoClient videoClient = null;
-	private StreamRecorder recorder = null;
-	private StreamPlayer player = null;
 	private boolean coordinating = false;
 	private boolean recording = false;
 	private boolean controlRequested = false;
@@ -68,12 +66,14 @@ public class MainActivity extends Activity implements MessageInterruption {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		handler = new Handler();
-		camera = getCamera();
 		createCameraPreview();
 		createMiddleware();
+		createVideoServer();
+		
 		fileManager = new FilePathProvider("SharedStreamApp");
+		
 		EditText edit = (EditText) findViewById(R.id.hostEditText);
-		edit.setText("192.168.2.2");
+		edit.setText("192.168.2.3");
 	}
 	
 	@Override
@@ -90,6 +90,8 @@ public class MainActivity extends Activity implements MessageInterruption {
 		super.onDestroy();
 		//preview.closePreview();
 		releaseCamera();
+		videoServer.close();
+		stopPlayback();
 	}
 
 	@Override
@@ -122,38 +124,29 @@ public class MainActivity extends Activity implements MessageInterruption {
 		return camera;
 	}
 	
-	private void releaseCamera(){
+	public void releaseCamera(){
 		if(camera != null){
 			camera.release();
 			camera = null;
 		}
 	}
 	
-	public String getIpAddr() {
-		   WifiManager wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
-		   WifiInfo wifiInfo = wifiManager.getConnectionInfo();
-		   int ip = wifiInfo.getIpAddress();
 
-		   String ipString = String.format(
-		   "%d.%d.%d.%d",
-		   (ip & 0xff),
-		   (ip >> 8 & 0xff),
-		   (ip >> 16 & 0xff),
-		   (ip >> 24 & 0xff));
-		   
-		   return ipString;
-	}
 	
-	public InetAddress getAddr() throws IOException{
-		String ip = getIpAddr();
-		return InetAddress.getByName(ip);
+	public InetAddress getAddress() throws IOException {
+		WifiManager wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
+		WifiInfo wifiInfo = wifiManager.getConnectionInfo();
+		int ip = wifiInfo.getIpAddress();
+
+		String ipString = String.format("%d.%d.%d.%d", (ip & 0xff),
+				(ip >> 8 & 0xff), (ip >> 16 & 0xff), (ip >> 24 & 0xff));
+		return InetAddress.getByName(ipString);
 	}
 
 	private void createMiddleware() {
 
 		try {
-			
-			middleware = new Middleware(this, getAddr());
+			middleware = new Middleware(this, getAddress());
 			middleware.createServerListener();
 		} catch (Exception ex) {
 			ex.printStackTrace();
@@ -162,10 +155,18 @@ public class MainActivity extends Activity implements MessageInterruption {
 	
 	private void createCameraPreview(){
 		FrameLayout previewHolder = (FrameLayout) findViewById(R.id.frameLayout);
-		preview  = new CameraPreview(this, camera, cameraId);
+		previewHolder.removeAllViews();
+		preview  = new CameraPreview(this, getCamera(), cameraId);
 		previewHolder.addView(preview);
 	}
 	
+	private void createVideoServer(){
+		try{
+			videoServer = new VideoServer(new StreamRecorder(getCamera(), preview));
+		}catch(IOException ex){
+			Log.e(TAG, "Fatal Error: VideoServer could not be created", ex);
+		}
+	}
 	
 	@Override
 	public void doInterruption(long processId) {
@@ -200,7 +201,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			//start playing video
 	
 			coordinatorSet = true;
-			startPlaying(pck.getVideoContext().getCoordinator().getHostAddress());
+			startPlayback(pck.getVideoContext().getCoordinator().getHostAddress());
 			
 			Log.d(TAG, "Playing video ...");
 		}
@@ -211,10 +212,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.requestControlButton,  false );
 			coordinating  = true;
 			coordinatorSet = true;
-			stopPlaying();
-			try{
-				Thread.sleep(1000);
-			}catch(InterruptedException ex){}
+			stopPlayback();
 			startRecording();
 			//serverError.setEnabled( false );
 			Log.d(TAG, "Recording ...");
@@ -235,23 +233,16 @@ public class MainActivity extends Activity implements MessageInterruption {
 			//serverError.setEnabled( false );
 			if(recording){
 				stopRecording();
-				try{
-					Thread.sleep(1000);
-				}catch(InterruptedException ex){}
 			}else{
-				try {
-					stopPlaying();
-					Thread.sleep(1000);
-				} catch (Exception ex) {
-					Log.e(TAG, "proble stopping playback", ex);
-				}
+				stopPlayback();
 			}
-			startPlaying(pck.getVideoContext().getCoordinator().getHostAddress());
+			startPlayback(pck.getVideoContext().getCoordinator().getHostAddress());
 			
 		}else if ( pck.getMessageType() == MSGTypes.RELEASE ) {
 			//setButtonEnabled( R.id.startRecButton,  true );
 			//setButtonEnabled( R.id.stopRecButton,  false );
 			Log.d(TAG, "Stopped recording ...");
+			stopRecording();
 		}
 		
 	}
@@ -327,16 +318,10 @@ public class MainActivity extends Activity implements MessageInterruption {
 				coordinatorSet = true;
 				coordinating = true;
 				middleware.setCoordinator(true);
-				middleware.getVideoContext().setCoordinator( getAddr() );
+				middleware.getVideoContext().setCoordinator( getAddress() );
 				startRecording();
 			}else{
-				if (coordinating && recorder != null ) {
-					//this is the coordinator but 
-					recorder.record();
-				} else {
-					// TODO: request control
-					
-				}
+				startRecording();
 			}
 		} catch (IOException ex) {
 			ex.printStackTrace();
@@ -356,7 +341,10 @@ public class MainActivity extends Activity implements MessageInterruption {
 	}
 	
 	public void onStopRecClicked(View view){
-		videoServer.pause();
+		videoServer.pauseRecorder();
+		setButtonEnabled(R.id.startRecButton, true);
+		setButtonEnabled(R.id.stopRecButton, false);
+		
 		execAsync(new Runnable() {
 			@Override
 			public void run() {
@@ -393,55 +381,44 @@ public class MainActivity extends Activity implements MessageInterruption {
 	
 	private void startRecording() {
 		try {
-			if (videoServer == null) {
-				videoServer = new VideoServer();
-			}
-			videoServer.start();
-			// preview.closePreview();
-			if (recorder == null) {
-				recorder = new StreamRecorder(getCamera(), preview.getHolder(), videoServer.getFileDescriptor());
-			}
-			recorder.record();
+			videoServer.stream(getCamera(), preview);
 			recording = true;
+			setButtonEnabled(R.id.startRecButton, false);
+			setButtonEnabled(R.id.stopRecButton, true);
 		} catch (Exception ex) {
 			Log.e(TAG, "Problem trying to start recording", ex);
 		}
 	}
 	
 	private void stopRecording(){
-		if(recorder != null){
-			recorder.stop();
-		}
-		if(videoServer != null){
-			videoServer.close();
-		}
-		videoServer = null;
-		recorder = null;
+		videoServer.sleep();
 		recording = false;
+		preview.closePreview();
 		releaseCamera();
+		setButtonEnabled(R.id.startRecButton, false);
+		setButtonEnabled(R.id.stopRecButton, false);
 	}
 	
-	private void startPlaying(String host){
-		preview.closePreview();
-		videoClient = new VideoClient(fileManager);
-		player = new StreamPlayer(videoClient, preview.getHolder());
-		videoClient.connect( host );
+	private void startPlayback(final String host){
+		handler.post(new Runnable() {
+			
+			@Override
+			public void run() {
+				createCameraPreview();
+				videoClient = new VideoClient(fileManager, new StreamPlayer(preview));
+				videoClient.connect( host );
+			}
+		}); 
+
 		
 	}
 	
 	
-	private void stopPlaying(){
-		if(player != null){
-			player.stop();
-		}
+	private void stopPlayback(){
 		if(videoClient != null){
 			videoClient.close();
+			videoClient = null;
 		}
-		player = null;
-		videoClient = null;
-		releaseCamera();
-
-
 	}
 	
 	private void setButtonEnabled(final int buttonId, final boolean enabled){

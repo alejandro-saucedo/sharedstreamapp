@@ -6,72 +6,102 @@ import android.hardware.Camera;
 import android.media.MediaRecorder;
 import android.util.Log;
 import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 
 public class StreamRecorder {
 	
 	private static final String TAG = StreamRecorder.class.getName();
-	private boolean prepared = false;
 	private boolean recording = false;
 	private MediaRecorder recorder = null;
 	private Camera camera = null;
-	private SurfaceHolder holder = null;
-	private FileDescriptor fd = null;
+	private SurfaceView surface = null;
+	private FileDescriptor currFD = null;
 	
-	public StreamRecorder(Camera camera, SurfaceHolder holder, FileDescriptor fd){
+	public StreamRecorder(Camera camera, SurfaceView surface){
+		if(camera == null){
+			throw new IllegalArgumentException("null camera");
+		}
+		if(surface == null){
+			throw new IllegalArgumentException("null surface");
+		}
 		this.camera = camera;
-		this.holder = holder;
-		this.fd = fd;
+		this.surface = surface;
 	}
 	
+	public void setCamera(Camera camera) {
+		this.camera = camera;
+	}
 	
-	public void record() {
-		if(!prepared){
-			prepared = prepareVideoRecorder(fd);
-		}
-		
-		if (!prepared) {
-			throw new IllegalStateException("MediaRecorder has not been prepared");
-		}
-		
-		//(new Thread(){ public void run() {
-		try {
-			recorder.start();
-			recording = true;
+	public Camera getCamera() {
+		return camera;
+	}
+	
+	public void setSurface(SurfaceView surface) {
+		this.surface = surface;
+	}
+	
+	public SurfaceView getSurface() {
+		return surface;
+	}
+	
+	public boolean isRecording() {
+		return recording;
+	}
+	
+	public void start(){
+		start(currFD);
+	}
+	
+	public void start(FileDescriptor fd) {
+		if (!recording) {
+			if (fd == null) {
+				throw new IllegalArgumentException("null file descriptor");
+			}			
+			boolean prepared = prepareVideoRecorder(fd);
 
-		} catch (Exception ex) {
-			Log.e(TAG, "Error at recorder.start()", ex);
-			recording = false;
-			prepared = false;
-			releaseMediaRecorder();
+			if (!prepared) {
+				throw new IllegalStateException("MediaRecorder could not be prepared");
+			}
+
+			try {
+				recorder.start();
+				recording = true;
+				this.currFD = fd;
+
+			} catch (Exception ex) {
+				Log.e(TAG, "Error starting MediaRecorder", ex);
+				recording = false;
+				releaseMediaRecorder();
+			}
 		}
-		//};}).start();
+		
 	}
 	
-	public void pause(){
+	public void stop(){
 		if(recording){
 			try{
+				Log.w(TAG, "Stopping recorder");
 				recorder.stop();
-			}catch(Exception ex){
-				Log.e(TAG, "Error at recorder.stop()", ex);
+			}catch(Error ex){
+				Log.e(TAG, "Error stopping MediaRecorder", ex);
 			}finally{
 				recording = false;
+				releaseMediaRecorder();
 			}
 			
 		}
 	}
-	
-	public void stop(){
-		pause();
-		releaseMediaRecorder();
-	}
-	
+		
 	private void releaseMediaRecorder(){
 		if(recorder != null){
+			Log.w(TAG, "resetting recorder");
 			recorder.reset();
+			Log.w(TAG, "releasing recorder");
 			recorder.release();
 			recorder = null;
+			Log.w(TAG, "unlocking camera");
 			camera.lock();
-			prepared = false;
+			recording = false;
 		}
 	}
 	
@@ -98,7 +128,7 @@ public class StreamRecorder {
 		
 		
 		// Step 5: Set the preview output
-		recorder.setPreviewDisplay(holder.getSurface());
+		recorder.setPreviewDisplay(surface.getHolder().getSurface());
 		
 		
 		// Step 6: Prepare configured MediaRecorder
