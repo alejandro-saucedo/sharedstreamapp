@@ -8,12 +8,13 @@ import android.media.MediaPlayer;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.widget.MediaController.MediaPlayerControl;
 
 import com.sstream.tcp.VideoClient;
 import com.sstream.util.Constants;
 
 public class StreamPlayer implements MediaPlayer.OnPreparedListener,
-		MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener {
+		MediaPlayer.OnCompletionListener, MediaPlayer.OnErrorListener, MediaPlayer.OnVideoSizeChangedListener {
 
 	private static final String TAG = StreamPlayer.class.getName();
 	private static long WAIT_TIME = 100;
@@ -26,6 +27,9 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 	private long lastFileLengh = 0;
 	private long playbackStartTime = 0;
 	private long playbackEndTime = 0;
+	
+	private boolean prepared = false;
+	private boolean sizeSet = false;
 	
 	public StreamPlayer(SurfaceView surface){
 		this.surface = surface;
@@ -64,13 +68,16 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 		long buffTime = buffering();
 		if(playback){
 			try {
-				//seekPosition += buffTime;
+				seekPosition += buffTime;
+				prepared = false;
+				sizeSet = false;
 				mediaPlayer.reset();
 				mediaPlayer.setDataSource(video.getAbsolutePath());
 				mediaPlayer.setDisplay(surface.getHolder());
 				mediaPlayer.setOnCompletionListener(this);
 				mediaPlayer.setOnPreparedListener(this);
 				mediaPlayer.setOnErrorListener(this);
+				mediaPlayer.setOnVideoSizeChangedListener(this);
 				mediaPlayer.prepareAsync();
 			} catch (Exception ex) {
 				Log.e(TAG, "Problem preparing media mediaPlayer", ex);
@@ -106,8 +113,14 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 
 	@Override
 	public void onPrepared(MediaPlayer mp) {
+		prepared = true;
+		Log.i(TAG, "MediaPlayer prepared. Duration:"+mp.getDuration()+" CurrPos:"+mp.getCurrentPosition());
+		if(sizeSet){
+			Log.i(TAG, "Moving MediaPlayer to position:"+seekPosition);
+			mediaPlayer.seekTo(seekPosition);
+			Log.i(TAG, "MediaPlayer position after moving: Duration:"+mp.getCurrentPosition());
+		}
 		mediaPlayer.start();
-		mediaPlayer.seekTo(seekPosition);
 		playbackStartTime = System.currentTimeMillis();
 	}
 
@@ -142,6 +155,17 @@ public class StreamPlayer implements MediaPlayer.OnPreparedListener,
 		Log.e(TAG, "MediaPlayer OnError: what="+whatStr+" , extra="+extra);
 
 		return true;
+	}
+
+	@Override
+	public void onVideoSizeChanged(MediaPlayer mp, int width, int height) {
+		if(width > 0 && height > 0){
+			sizeSet = true;
+			if(prepared){
+				mp.seekTo(seekPosition);
+			}
+		}
+		
 	}
 
 }

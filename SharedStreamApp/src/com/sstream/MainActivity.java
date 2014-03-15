@@ -73,7 +73,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 		fileManager = new FilePathProvider("SharedStreamApp");
 		
 		EditText edit = (EditText) findViewById(R.id.hostEditText);
-		edit.setText("192.168.2.3");
+		edit.setText("192.168.1.67");
 	}
 	
 	@Override
