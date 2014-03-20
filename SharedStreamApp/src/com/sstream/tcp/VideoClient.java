@@ -82,8 +82,8 @@ public class VideoClient {
 		}
 	}
 
+	byte[] data = new byte[Constants.DATA_BUFFER_SIZE];
 	private void receiveStream(InputStream videoIn) {
-		byte[] data = new byte[Constants.DATA_BUFFER_SIZE];
 		int offset = 0;
 		int bytesRead = 0;
 		try {

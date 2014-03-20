@@ -2,8 +2,6 @@ package com.sstream;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.util.List;
 
 import com.sharedstreamapp.R;
@@ -18,48 +16,45 @@ import com.sstream.middleware.util.MSGTypes;
 import com.sstream.middleware.util.MessageInterruption;
 import com.sstream.middleware.util.VideoException;
 import com.sstream.middleware.util.VideoInterface;
-import com.sstream.middleware.util.VideoInterruption;
 import com.sstream.middleware.util.VideoPackage;
 import com.sstream.tcp.VideoClient;
 import com.sstream.tcp.VideoServer;
 import com.sstream.util.FilePathProvider;
+import com.sstream.util.NsdHelper;
+import com.sstream.util.NsdHelper.NSDListener;
 
+import android.net.nsd.NsdManager;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.app.Activity;
-import android.graphics.Color;
 import android.hardware.Camera;
-import android.hardware.Camera.CameraInfo;
 import android.util.Log;
 import android.view.Menu;
-import android.view.Surface;
-import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 
-public class MainActivity extends Activity implements MessageInterruption {
+public class MainActivity extends Activity implements MessageInterruption, NSDListener {
 	
 	private static final String TAG = MainActivity.class.getName();
 	private int cameraId = 1;
 	private Camera camera = null;
 	private CameraPreview preview = null;
-	private boolean previewActive = false;
+//	private boolean previewActive = false;
 	private Middleware middleware = null;
 	private Handler handler = null;
 	private VideoServer videoServer = null;
 	private VideoClient videoClient = null;
 	private boolean coordinating = false;
 	private boolean recording = false;
-	private boolean controlRequested = false;
+//	private boolean controlRequested = false;
 	private FilePathProvider fileManager = null;
 	
 	private boolean coordinatorSet = false;
-	
+	private NsdHelper nsdHelper;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -73,16 +68,67 @@ public class MainActivity extends Activity implements MessageInterruption {
 		fileManager = new FilePathProvider("SharedStreamApp");
 		
 		EditText edit = (EditText) findViewById(R.id.hostEditText);
-		edit.setText("192.168.1.67");
+		edit.setText("");
+		setButtonEnabled( R.id.connectButton,  false );
+		setButtonEnabled( R.id.stopRecButton,  false );
+		setButtonEnabled( R.id.requestControlButton,  false );
+		nsdHelper = new NsdHelper(this,this);
+		nsdHelper.initializeNsd();
+	}
+	
+	@Override
+	public void serviceStarted(){
+		handler.post(new Runnable(){
+			public void run() {
+				setButtonEnabled( R.id.stopRecButton,  true );
+			}
+		});
+	}
+
+	@Override
+	public void serviceDiscoverd(final InetAddress host, int port) {
+		handler.post(new Runnable(){
+			public void run() {
+				EditText edit = (EditText) findViewById(R.id.hostEditText);
+				edit.setText(host.getHostAddress());
+				setButtonEnabled( R.id.connectButton,  true );
+				setButtonEnabled( R.id.startRecButton,  false );
+			};
+		});
+	}
+
+
+	@Override
+	public void serviceLost() {
+		handler.post(new Runnable(){
+			public void run() {
+				EditText edit = (EditText) findViewById(R.id.hostEditText);
+				edit.setText("");
+				setButtonEnabled( R.id.connectButton,  false );
+				setButtonEnabled( R.id.startRecButton,  true );
+			};
+		});
+	}
+	
+	@Override
+	protected void onPause() {
+		if (nsdHelper != null) {
+			nsdHelper.unregister();
+			nsdHelper.stopDiscovery();
+        }
+		super.onPause();
 	}
 	
 	@Override
 	protected void onResume() {
 		super.onResume();
 		camera = getCamera();
-//		if(previewActive){
-//			preview.openPreview();
+//		if (nsdHelper != null) {
+//			nsdHelper.discoverServices();
 //		}
+		// if(previewActive){
+		// preview.openPreview();
+		// }
 	}
 	
 	@Override
@@ -92,6 +138,12 @@ public class MainActivity extends Activity implements MessageInterruption {
 		releaseCamera();
 		videoServer.close();
 		stopPlayback();
+		nsdHelper.unregister();
+	}
+	
+	@Override
+	public void onBackPressed() {
+		super.onBackPressed();
 	}
 
 	@Override
@@ -216,6 +268,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			startRecording();
 			//serverError.setEnabled( false );
 			Log.d(TAG, "Recording ...");
+			nsdHelper.registerService(123);
 		}
 		else if ( pck.getMessageType() == MSGTypes.COORDINATOR_POSITION_AVAILABLE ) {
 			setButtonEnabled( R.id.startRecButton,  true );
@@ -223,6 +276,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.requestControlButton,  false );
 			coordinatorSet = false;
 			Log.d(TAG, "--> Coordinator position available, press start recording to stream video.");
+			stopPlayback();
 		}
 		else if ( pck.getMessageType() == MSGTypes.COORDINATOR_SET) {
 			// connect to origin to stablish the socket tcp connection
@@ -231,6 +285,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			setButtonEnabled( R.id.startRecButton,  false );
 			setButtonEnabled( R.id.stopRecButton,  false );
 			//serverError.setEnabled( false );
+			nsdHelper.unregister();
 			if(recording){
 				stopRecording();
 			}else{
@@ -243,6 +298,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			//setButtonEnabled( R.id.stopRecButton,  false );
 			Log.d(TAG, "Stopped recording ...");
 			stopRecording();
+			nsdHelper.unregister();
 		}
 		
 	}
@@ -311,10 +367,12 @@ public class MainActivity extends Activity implements MessageInterruption {
 	
 	public void onStartRecClicked(View view){
 		try {
+			nsdHelper.registerService(123);
 			if(!coordinatorSet){
 				setButtonEnabled(R.id.startRecButton, false);
 				setButtonEnabled(R.id.requestControlButton, false);
-				setButtonEnabled(R.id.stopRecButton, true);
+//				setButtonEnabled(R.id.stopRecButton, true);
+				setButtonEnabled(R.id.connectButton, false);
 				coordinatorSet = true;
 				coordinating = true;
 				middleware.setCoordinator(true);
@@ -355,6 +413,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 				}
 			}
 		});
+		nsdHelper.unregister();
 	}
 		
 	public void onConnectClicked(View view){
@@ -384,7 +443,7 @@ public class MainActivity extends Activity implements MessageInterruption {
 			videoServer.stream(getCamera(), preview);
 			recording = true;
 			setButtonEnabled(R.id.startRecButton, false);
-			setButtonEnabled(R.id.stopRecButton, true);
+//			setButtonEnabled(R.id.stopRecButton, true);
 		} catch (Exception ex) {
 			Log.e(TAG, "Problem trying to start recording", ex);
 		}
@@ -436,5 +495,5 @@ public class MainActivity extends Activity implements MessageInterruption {
 		Thread t = new Thread(runnable);
 		t.start();
 	}
-	
+
 }

@@ -141,7 +141,7 @@ public class VideoServer {
 	}
 	
 	public void pauseRecorder(){
-		if(state == STATE_SLEEPING || state == STATE_WAITING){
+		if(state == STATE_WAITING || state == STATE_STREAMING){
 			stopStreaming(STATE_WAITING);
 			changeState(STATE_WAITING);
 		}
