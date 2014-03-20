@@ -9,6 +9,7 @@ import java.net.Socket;
 
 import android.util.Log;
 
+import com.sstream.MainActivity;
 import com.sstream.camera.StreamPlayer;
 import com.sstream.util.Constants;
 import com.sstream.util.FilePathProvider;
@@ -39,8 +40,9 @@ public class VideoClient {
 			}
 			if (videoIn != null) {
 				try {
+					byte[] data = new byte[Constants.DATA_BUFFER_SIZE];
 					while (receiving && socket.isConnected()) {
-						receiveStream(videoIn);
+						receiveStream(videoIn,data);
 					}
 				} catch (Exception ex) {
 					Log.e(TAG, "Problem receiving stream", ex);
@@ -52,10 +54,13 @@ public class VideoClient {
 			}
 		}
 	};
+	
+	private MainActivity mainActivity = null;
 
-	public VideoClient(FilePathProvider fileManager, StreamPlayer player) {
+	public VideoClient(FilePathProvider fileManager, StreamPlayer player, MainActivity mainActivity) {
 		this.fileManager = fileManager;
 		this.player = player;
+		this.mainActivity = mainActivity;
 	}
 	
 	public void setPlayer(StreamPlayer player) {
@@ -82,8 +87,8 @@ public class VideoClient {
 		}
 	}
 
-	byte[] data = new byte[Constants.DATA_BUFFER_SIZE];
-	private void receiveStream(InputStream videoIn) {
+	
+	private void receiveStream(InputStream videoIn, byte[] data) {
 		int offset = 0;
 		int bytesRead = 0;
 		try {
@@ -106,6 +111,7 @@ public class VideoClient {
 		} catch (IOException ex) {
 			if(receiving){
 				Log.e(TAG, "Problem receiving stream", ex);
+				mainActivity.serverDown(host);
 			}
 		}
 	}

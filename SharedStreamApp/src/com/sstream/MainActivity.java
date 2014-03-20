@@ -464,7 +464,7 @@ public class MainActivity extends Activity implements MessageInterruption, NSDLi
 			@Override
 			public void run() {
 				createCameraPreview();
-				videoClient = new VideoClient(fileManager, new StreamPlayer(preview));
+				videoClient = new VideoClient(fileManager, new StreamPlayer(preview),MainActivity.this);
 				videoClient.connect( host );
 			}
 		}); 
@@ -494,6 +494,17 @@ public class MainActivity extends Activity implements MessageInterruption, NSDLi
 	private void execAsync(Runnable runnable){
 		Thread t = new Thread(runnable);
 		t.start();
+	}
+	
+	public void serverDown(final String host){
+		execAsync(new Runnable() {
+			
+			@Override
+			public void run() {
+				middleware.handleServerDownError();
+				
+			}
+		});
 	}
 
 }
