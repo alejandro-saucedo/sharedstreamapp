@@ -440,6 +440,7 @@ public class MainActivity extends Activity implements MessageInterruption, NSDLi
 	
 	private void startRecording() {
 		try {
+//			createCameraPreview();
 			videoServer.stream(getCamera(), preview);
 			recording = true;
 			setButtonEnabled(R.id.startRecButton, false);
@@ -477,6 +478,7 @@ public class MainActivity extends Activity implements MessageInterruption, NSDLi
 		if(videoClient != null){
 			videoClient.close();
 			videoClient = null;
+//			createCameraPreview();
 		}
 	}
 	
